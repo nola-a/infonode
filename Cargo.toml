@@ -1,0 +1,21 @@
+[package]
+name = "infonode"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "infonode-server"
+path = "src/server.rs"
+
+[[bin]]
+name = "infonode-client"
+path = "src/client.rs"
+
+[dependencies]
+tonic = "0.9"
+prost = "0.11"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+tokio-stream = "0.1"
+
+[build-dependencies]
+tonic-build = "0.9"
