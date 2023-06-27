@@ -1,3 +1,25 @@
+/**
+ *  Copyright (c) 2023 Antonino Nolano. Licensed under the MIT license, as
+ * follows:
+ *
+ *  Permission is hereby granted, free of charge, to any person obtaining a copy
+ *  of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ *  furnished to do so, subject to the following conditions:
+ *
+ *  The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
 use crossbeam_channel::Sender;
 use crossbeam_channel::{select, unbounded};
 use futures::executor::block_on;
@@ -16,9 +38,6 @@ use crate::binance::BinanceClient;
 
 pub mod bitstamp;
 use crate::bitstamp::BitstampClient;
-
-pub mod testmarket;
-use crate::testmarket::GenClient;
 
 pub mod orderbook {
     tonic::include_proto!("orderbook");
@@ -48,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // parse command line
     let pair = env::args()
         .nth(1)
-        .unwrap_or_else(|| panic!("launch with currency pair"));
+        .unwrap_or_else(|| panic!("run ./infonode-server ethbtc"));
 
     // create queues
     let (orders_tx, orders_rx) = unbounded();
@@ -89,10 +108,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // bitstamp client setup and wiring
     let bitstamp_client = BitstampClient::new(pair.to_string());
     bitstamp_client.do_main_loop(orders_tx.clone());
-
-    //  test market
-    let gen_client = GenClient::new(pair.to_string());
-    gen_client.do_main_loop(orders_tx.clone());
 
     // setup address for grpc server binding
     let addr = "[::1]:1079".parse()?;

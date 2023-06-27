@@ -1,3 +1,25 @@
+/**
+ *  Copyright (c) 2023 Antonino Nolano. Licensed under the MIT license, as
+ * follows:
+ *
+ *  Permission is hereby granted, free of charge, to any person obtaining a copy
+ *  of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ *  furnished to do so, subject to the following conditions:
+ *
+ *  The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
 use crate::orderbook::{Level, Summary};
 use bigdecimal::{BigDecimal, ToPrimitive};
 use std::cmp::Ordering;
@@ -34,8 +56,8 @@ impl Book {
         }
 
         // create summary
-        self.summary.bids = Vec::new();
-        self.summary.asks = Vec::new();
+        self.summary.bids.clear();
+        self.summary.asks.clear();
 
         // up top 10 asks
         let mut a = self.asks.clone();
@@ -44,7 +66,7 @@ impl Book {
                 self.summary.asks.push(Level {
                     exchange: val.exchange.to_string(),
                     price: val.price.to_f64().unwrap(),
-                    amount: val.price.to_f64().unwrap(),
+                    amount: val.amount.to_f64().unwrap(),
                 });
             } else {
                 break;
@@ -58,7 +80,7 @@ impl Book {
                 self.summary.bids.push(Level {
                     exchange: val.exchange.to_string(),
                     price: val.price.to_f64().unwrap(),
-                    amount: val.price.to_f64().unwrap(),
+                    amount: val.amount.to_f64().unwrap(),
                 });
             } else {
                 break;
@@ -67,16 +89,11 @@ impl Book {
 
         // calculate spread
         match (self.asks.peek(), self.bids.peek()) {
-            (Some(Reverse(ask_price)), Some(bid_price)) => {
-                self.summary.spread =
-                    ask_price.price.to_f64().unwrap() - bid_price.price.to_f64().unwrap()
+            (Some(Reverse(ask)), Some(bid)) => {
+                self.summary.spread = ask.price.to_f64().unwrap() - bid.price.to_f64().unwrap()
             }
-            (None, Some(bid_price)) => {
-                self.summary.spread = bid_price.price.to_f64().unwrap() * -1.0
-            }
-            (Some(Reverse(ask_price)), None) => {
-                self.summary.spread = ask_price.price.to_f64().unwrap()
-            }
+            (None, Some(bid)) => self.summary.spread = bid.price.to_f64().unwrap() * -1.0,
+            (Some(Reverse(ask)), None) => self.summary.spread = ask.price.to_f64().unwrap(),
             (None, None) => self.summary.spread = 0.0,
         }
     }
@@ -86,7 +103,7 @@ impl Book {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub enum Exchange {
     Binance,
     Bitstamp,
@@ -101,7 +118,7 @@ impl std::fmt::Display for Exchange {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub struct Entry {
     price: BigDecimal,
     amount: BigDecimal,
@@ -140,8 +157,6 @@ impl Update {
         });
     }
 }
-
-impl Eq for Entry {}
 
 impl PartialOrd for Entry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
