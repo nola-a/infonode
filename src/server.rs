@@ -1,12 +1,12 @@
-use tonic::{transport::Server, Request, Response, Status};
-use tokio_stream::wrappers::ReceiverStream;
+use crossbeam_channel::Sender;
+use crossbeam_channel::{select, unbounded};
+use futures::executor::block_on;
 use orderbook::orderbook_aggregator_server::{OrderbookAggregator, OrderbookAggregatorServer};
 use orderbook::{Empty, Summary};
-use std::thread;
-use crossbeam_channel::{select, unbounded};
-use crossbeam_channel::{Sender, Receiver};
 use std::env;
-use tokio::task;
+use std::thread;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{transport::Server, Request, Response, Status};
 
 pub mod book;
 use crate::book::Book;
@@ -17,18 +17,20 @@ use crate::binance::BinanceClient;
 pub mod bitstamp;
 use crate::bitstamp::BitstampClient;
 
+pub mod testmarket;
+use crate::testmarket::GenClient;
+
 pub mod orderbook {
     tonic::include_proto!("orderbook");
 }
 
 #[derive(Debug)]
 struct MyOrderbookAggregator {
-    clients_tx: Sender<tokio::sync::mpsc::Sender<Result<Summary, Status>>>
+    clients_tx: Sender<tokio::sync::mpsc::Sender<Result<Summary, Status>>>,
 }
 
 #[tonic::async_trait]
 impl OrderbookAggregator for MyOrderbookAggregator {
-
     type BookSummaryStream = ReceiverStream<Result<Summary, Status>>;
 
     async fn book_summary(
@@ -43,62 +45,54 @@ impl OrderbookAggregator for MyOrderbookAggregator {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     // parse command line
-    let args: Vec<String> = env::args().collect();
-    let pair = &args[1];
+    let pair = env::args()
+        .nth(1)
+        .unwrap_or_else(|| panic!("launch with currency pair"));
 
     // create queues
     let (orders_tx, orders_rx) = unbounded();
     let (clients_tx, clients_rx) = unbounded();
 
     // create grpc service
-    let aggregator = MyOrderbookAggregator{clients_tx: clients_tx.clone()};
+    let aggregator = MyOrderbookAggregator {
+        clients_tx: clients_tx.clone(),
+    };
+
+    // main event loop
+    let mut book = Book::new();
+    let mut clients = Vec::<tokio::sync::mpsc::Sender<Result<Summary, Status>>>::new();
+    thread::spawn(move || loop {
+        select! {
+            recv(orders_rx) -> orders => {
+                book.add_orders(orders.unwrap());
+                let summary = book.to_summary();
+                clients.retain_mut(|client|
+                     block_on(client.send(Ok(summary.clone()))).is_ok()
+                );
+
+            }
+            recv(clients_rx) -> client => {
+                let summary = book.to_summary();
+                let uc = client.unwrap();
+                if block_on(uc.send(Ok(summary))).is_ok() {
+                    clients.push(uc);
+                }
+            }
+        }
+    });
 
     // binance client setup and wiring
     let binance_client = BinanceClient::new(pair.to_string());
-    binance_client.connect();
-    let tx1 = orders_tx.clone();
-    thread::spawn(move || 
-        binance_client.do_main_loop(|orders| tx1.send(orders).unwrap())
-    );
+    binance_client.do_main_loop(orders_tx.clone());
 
-    // bistamp client setup and wiring
+    // bitstamp client setup and wiring
     let bitstamp_client = BitstampClient::new(pair.to_string());
-    bitstamp_client.connect();
-    let tx2 = orders_tx.clone();
-    thread::spawn(move || 
-        bitstamp_client.do_main_loop(|orders| tx2.send(orders).unwrap())
-    );
+    bitstamp_client.do_main_loop(orders_tx.clone());
 
-    // main event loop
-    let book = Book::new();
-    let mut clients = Vec::<tokio::sync::mpsc::Sender<Result<Summary, Status>>>::new();
-    thread::spawn(move || 
-        select! {
-            recv(orders_rx) -> orders => { 
-                book.add_orders(orders.unwrap());
-                let summary = book.to_summary();
-                for client in clients {
-                    let s = summary.clone();
-                    let c = client.clone();
-                    task::spawn(async move {
-                        c.send(Ok(s)).await.unwrap();
-                    });
-                }
-            }
-            recv(clients_rx) -> client => {
-                let uc = client.unwrap();
-                let c = uc.clone();
-                clients.push(uc);
-                let s = book.to_summary();
-                task::spawn(async move {
-                    c.send(Ok(s)).await.unwrap();
-                });
-
-            }
-        }
-    );
+    //  test market
+    let gen_client = GenClient::new(pair.to_string());
+    gen_client.do_main_loop(orders_tx.clone());
 
     // setup address for grpc server binding
     let addr = "[::1]:1079".parse()?;

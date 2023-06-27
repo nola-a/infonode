@@ -1,27 +1,38 @@
-use crate::book::Update;
 use crate::book::Exchange;
+use crate::book::Update;
+use crossbeam_channel::Sender;
+use tokio::time::{sleep, Duration};
 
 pub struct BinanceClient {
     pair: String,
-    endpoint: String
 }
 
-impl BinanceClient {
+//{
+//    "lastUpdateId": 160,  // Last update ID
+//    "bids": [             // Bids to be updated
+//      [
+//        "0.0024",         // Price level to be updated
+//        "10"              // Quantity
+//      ]
+//    ],
+//    "asks": [             // Asks to be updated
+//      [
+//        "0.0026",         // Price level to be updated
+//        "100"             // Quantity
+//      ]
+//    ]
+//  }
 
+//let url = format!("{}{}{}", "wss://stream.binance.com:9443/ws/", self.pair, "@depth20@100ms");
+//let url = format!("{}{}{}", "wss://testnet.binance.vision/ws", self.pair, "@depth20@100ms");
+
+impl BinanceClient {
     pub fn new(pair: String) -> BinanceClient {
         // TODO
-        BinanceClient{pair: pair.to_string(), endpoint: "endpoint".to_string()}
+        BinanceClient {
+            pair: pair.to_string(),
+        }
     }
 
-    pub fn connect(&self) {
-        // TODO
-    }
-
-    pub fn do_main_loop<F>(&self, f: F) where
-        F: Fn(Update) {
-        // TODO
-        let orders = Update::new(Exchange::Binance);
-        f(orders);
-    }
-
+    pub fn do_main_loop(&self, tx: Sender<Update>) {}
 }
