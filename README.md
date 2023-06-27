@@ -7,3 +7,8 @@ $ cargo run --bin infonode-server ethbtc
 ```bash
 $ cargo run --bin infonode-client
 ```
+
+# Format code
+```bash
+$ cargo fmt
+```

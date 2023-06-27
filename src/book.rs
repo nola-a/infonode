@@ -22,7 +22,7 @@ impl Book {
 
     pub fn add_orders(&mut self, mut orders: Update) -> () {
         // remove older orders
-        self.asks.retain(|e| e.0.exchange != orders.exchange);
+        self.asks.retain(|Reverse(e)| e.exchange != orders.exchange);
         self.bids.retain(|e| e.exchange != orders.exchange);
 
         // insert orders
@@ -34,35 +34,51 @@ impl Book {
         }
 
         // create summary
-        let mut bids: Vec<Level> = Vec::new();
-        let mut asks: Vec<Level> = Vec::new();
+        self.summary.bids = Vec::new();
+        self.summary.asks = Vec::new();
 
-        // top 10 asks
+        // up top 10 asks
         let mut a = self.asks.clone();
         for _ in 1..11 {
-            let val: Entry = a.pop().unwrap().0;
-            asks.push(Level {
-                exchange: val.exchange.to_string(),
-                price: val.price.to_f64().unwrap(),
-                amount: val.price.to_f64().unwrap(),
-            });
+            if let Some(Reverse(val)) = a.pop() {
+                self.summary.asks.push(Level {
+                    exchange: val.exchange.to_string(),
+                    price: val.price.to_f64().unwrap(),
+                    amount: val.price.to_f64().unwrap(),
+                });
+            } else {
+                break;
+            }
         }
 
-        // top 10 bids
+        // up to 10 bids
         let mut b = self.bids.clone();
         for _ in 1..11 {
-            let val: Entry = b.pop().unwrap();
-            bids.push(Level {
-                exchange: val.exchange.to_string(),
-                price: val.price.to_f64().unwrap(),
-                amount: val.price.to_f64().unwrap(),
-            });
+            if let Some(val) = b.pop() {
+                self.summary.bids.push(Level {
+                    exchange: val.exchange.to_string(),
+                    price: val.price.to_f64().unwrap(),
+                    amount: val.price.to_f64().unwrap(),
+                });
+            } else {
+                break;
+            }
         }
 
-        self.summary.asks = asks;
-        self.summary.bids = bids;
-        self.summary.spread = self.asks.peek().unwrap().0.price.to_f64().unwrap()
-            - self.bids.peek().unwrap().price.to_f64().unwrap();
+        // calculate spread
+        match (self.asks.peek(), self.bids.peek()) {
+            (Some(Reverse(ask_price)), Some(bid_price)) => {
+                self.summary.spread =
+                    ask_price.price.to_f64().unwrap() - bid_price.price.to_f64().unwrap()
+            }
+            (None, Some(bid_price)) => {
+                self.summary.spread = bid_price.price.to_f64().unwrap() * -1.0
+            }
+            (Some(Reverse(ask_price)), None) => {
+                self.summary.spread = ask_price.price.to_f64().unwrap()
+            }
+            (None, None) => self.summary.spread = 0.0,
+        }
     }
 
     pub fn to_summary(&self) -> Summary {
