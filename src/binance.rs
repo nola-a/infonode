@@ -23,6 +23,7 @@
 use crate::book::Exchange;
 use crate::book::Update;
 use crossbeam_channel::Sender;
+use log::info;
 use tungstenite::connect;
 use url::Url;
 
@@ -66,14 +67,16 @@ impl BinanceClient {
     pub fn do_main_loop(&self, tx: Sender<Update>) {
         let stream_url = format!(
             "{}{}{}",
-            "wss://stream.binance.com:9443/ws/", self.pair, "@depth20@100ms"
+            "wss://stream.binance.com:9443/ws/", self.pair, "@depth10@100ms"
         );
 
         let pair = self.pair.clone();
 
         tokio::spawn(async move {
             let (p_prec, a_prec) = BinanceClient::precisions(pair).await;
+            info!("precisions price={} amount={}", p_prec, a_prec);
             let (mut socket, _) = connect(Url::parse(&stream_url).unwrap()).expect("Can't connect");
+            info!("websocket connected");
             loop {
                 let msg = socket.read_message().expect("Error reading message");
                 let parsed = json::parse(&msg.to_string()).unwrap();

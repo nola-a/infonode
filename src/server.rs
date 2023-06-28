@@ -23,6 +23,7 @@
 use crossbeam_channel::Sender;
 use crossbeam_channel::{select, unbounded};
 use futures::executor::block_on;
+use log::info;
 use orderbook::orderbook_aggregator_server::{OrderbookAggregator, OrderbookAggregatorServer};
 use orderbook::{Empty, Summary};
 use std::env;
@@ -64,6 +65,8 @@ impl OrderbookAggregator for MyOrderbookAggregator {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    simple_logger::init_with_level(log::Level::Debug).unwrap();
+
     // parse command line
     let pair = env::args()
         .nth(1)
@@ -86,8 +89,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             recv(orders_rx) -> orders => {
                 book.add_orders(orders.unwrap());
                 let summary = book.to_summary();
-                clients.retain_mut(|client|
-                     block_on(client.send(Ok(summary.clone()))).is_ok()
+                clients.retain_mut(|client| {
+                     let s =  block_on(client.send(Ok(summary.clone()))).is_ok();
+                     if !s {
+                        info!("remove grpc client");
+                     }
+                     return s;
+                }
                 );
 
             }
@@ -95,6 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let summary = book.to_summary();
                 let uc = client.unwrap();
                 if block_on(uc.send(Ok(summary))).is_ok() {
+                    info!("new grpc client");
                     clients.push(uc);
                 }
             }
@@ -111,6 +120,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // setup address for grpc server binding
     let addr = "[::1]:1079".parse()?;
+
+    info!("grpc server listening for client on port=1079");
 
     // run grpc server
     Server::builder()

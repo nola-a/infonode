@@ -23,6 +23,8 @@
 use crate::book::Exchange;
 use crate::book::Update;
 use crossbeam_channel::Sender;
+use log::info;
+use std::cmp;
 use tungstenite::{connect, Message};
 use url::Url;
 
@@ -73,14 +75,17 @@ impl BitstampClient {
         let pair = self.pair.clone();
 
         tokio::spawn(async move {
-            let (p_prec, a_prec) = BitstampClient::precisions(pair).await;
+            let (p_prec, a_prec) = BitstampClient::precisions(pair.clone()).await;
+            info!("precisions price={} amount={}", p_prec, a_prec);
             let (mut socket, _) = connect(Url::parse(&stream_url).unwrap()).expect("Can't connect");
+            info!("websocket connected");
             socket
                 .write_message(Message::Text(submessage.into()))
                 .unwrap();
             let msg = socket.read_message().expect("Error reading message");
             let parsed = json::parse(&msg.to_string()).unwrap();
             if parsed.has_key("event") && parsed["event"] == "bts:subscription_succeeded" {
+                info!("subscribed to {}", pair);
                 loop {
                     let msg = socket.read_message().expect("Error reading message");
                     let parsed = json::parse(&msg.to_string()).unwrap();
@@ -89,7 +94,7 @@ impl BitstampClient {
                         && parsed["data"].has_key("asks")
                         && parsed["data"]["asks"].is_array()
                     {
-                        for i in 0..parsed["data"]["asks"].len() {
+                        for i in 0..cmp::min(10, parsed["data"]["asks"].len()) {
                             if parsed["data"]["asks"][i].len() == 2 {
                                 orders.add_ask(
                                     &parsed["data"]["asks"][i][0].to_string(),
@@ -102,7 +107,7 @@ impl BitstampClient {
                         && parsed["data"].has_key("bids")
                         && parsed["data"]["bids"].is_array()
                     {
-                        for i in 0..parsed["data"]["bids"].len() {
+                        for i in 0..cmp::min(10, parsed["data"]["bids"].len()) {
                             if parsed["data"]["bids"][i].len() == 2 {
                                 orders.add_bid(
                                     &parsed["data"]["bids"][i][0].to_string(),

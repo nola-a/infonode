@@ -22,6 +22,7 @@
  */
 use crate::orderbook::{Level, Summary};
 use bigdecimal::{BigDecimal, ToPrimitive};
+use log::{debug, trace};
 use std::cmp::Ordering;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -44,14 +45,26 @@ impl Book {
     }
 
     pub fn add_orders(&mut self, mut orders: Update) -> () {
-        // remove existing orders for orders.exchange
+        // remove existing orders orders.exchange
+        debug!("remove {} orders", orders.exchange);
+
         self.asks.retain(|Reverse(e)| e.exchange != orders.exchange);
         self.bids.retain(|e| e.exchange != orders.exchange);
 
         // insert orders
+        debug!(
+            "insert {} ask orders from {}",
+            orders.asks.len(),
+            orders.exchange
+        );
         for x in orders.asks.drain(..) {
             self.asks.push(Reverse(x)); // asc
         }
+        debug!(
+            "insert {} bids orders from {}",
+            orders.bids.len(),
+            orders.exchange
+        );
         for x in orders.bids.drain(..) {
             self.bids.push(x); // desc
         }
@@ -60,9 +73,9 @@ impl Book {
         self.summary.bids.clear();
         self.summary.asks.clear();
 
-        // up top 10 asks
+        // up top 20 asks
         let mut a = self.asks.clone();
-        for _ in 1..11 {
+        for _ in 1..21 {
             if let Some(Reverse(val)) = a.pop() {
                 self.summary.asks.insert(
                     0,
@@ -77,9 +90,9 @@ impl Book {
             }
         }
 
-        // up to 10 bids
+        // up to 20 bids
         let mut b = self.bids.clone();
-        for _ in 1..11 {
+        for _ in 1..21 {
             if let Some(val) = b.pop() {
                 self.summary.bids.insert(
                     0,
@@ -109,6 +122,13 @@ impl Book {
             (Some(Reverse(ask)), None) => self.summary.spread = ask.price.to_f64().unwrap(),
             (None, None) => self.summary.spread = 0.0,
         }
+
+        debug!(
+            "summary.spread={} top {} asks top {} bids",
+            self.summary.spread,
+            self.summary.asks.len(),
+            self.summary.bids.len()
+        );
     }
 
     pub fn to_summary(&self) -> Summary {
@@ -454,6 +474,5 @@ mod tests {
                 exchange: "binance".to_string()
             }
         );
-        
     }
 }
