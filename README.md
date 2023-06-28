@@ -1,19 +1,21 @@
-# Infonode-server
+# Infonode - GrpcServer
+### Run grpc server
 ```bash
 $ cargo run --bin infonode-server ethbtc
 ```
 
-# Infonode-client
+### Run grpc client (debugging purpose)
+note that precisions must be applied to get the right prices 
 ```bash
 $ cargo run --bin infonode-client
 ```
 
-# Format code
+### Format code
 ```bash
 $ cargo fmt
 ```
 
-# Running test
+### Running test
 ```bash
 $ cargo test
 ```
