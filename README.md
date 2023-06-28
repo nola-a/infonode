@@ -12,3 +12,8 @@ $ cargo run --bin infonode-client
 ```bash
 $ cargo fmt
 ```
+
+# Running test
+```bash
+$ cargo test
+```

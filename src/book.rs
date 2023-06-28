@@ -25,6 +25,7 @@ use bigdecimal::{BigDecimal, ToPrimitive};
 use std::cmp::Ordering;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
+use std::ops::Sub;
 use std::str::FromStr;
 
 pub struct Book {
@@ -43,7 +44,7 @@ impl Book {
     }
 
     pub fn add_orders(&mut self, mut orders: Update) -> () {
-        // remove older orders
+        // remove existing orders for orders.exchange
         self.asks.retain(|Reverse(e)| e.exchange != orders.exchange);
         self.bids.retain(|e| e.exchange != orders.exchange);
 
@@ -63,7 +64,7 @@ impl Book {
         let mut a = self.asks.clone();
         for _ in 1..11 {
             if let Some(Reverse(val)) = a.pop() {
-                self.summary.asks.push(Level {
+                self.summary.asks.insert(0, Level {
                     exchange: val.exchange.to_string(),
                     price: val.price.to_f64().unwrap(),
                     amount: val.amount.to_f64().unwrap(),
@@ -77,7 +78,7 @@ impl Book {
         let mut b = self.bids.clone();
         for _ in 1..11 {
             if let Some(val) = b.pop() {
-                self.summary.bids.push(Level {
+                self.summary.bids.insert(0, Level {
                     exchange: val.exchange.to_string(),
                     price: val.price.to_f64().unwrap(),
                     amount: val.amount.to_f64().unwrap(),
@@ -90,9 +91,9 @@ impl Book {
         // calculate spread
         match (self.asks.peek(), self.bids.peek()) {
             (Some(Reverse(ask)), Some(bid)) => {
-                self.summary.spread = ask.price.to_f64().unwrap() - bid.price.to_f64().unwrap()
+                self.summary.spread = ask.price.clone().sub(bid.price.clone()).to_f64().unwrap();
             }
-            (None, Some(bid)) => self.summary.spread = bid.price.to_f64().unwrap() * -1.0,
+            (None, Some(bid)) => self.summary.spread = bid.price.to_f64().unwrap() * (-1.0),
             (Some(Reverse(ask)), None) => self.summary.spread = ask.price.to_f64().unwrap(),
             (None, None) => self.summary.spread = 0.0,
         }
@@ -167,5 +168,182 @@ impl PartialOrd for Entry {
 impl Ord for Entry {
     fn cmp(&self, other: &Entry) -> Ordering {
         self.partial_cmp(other).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spread_1() {
+        let mut orders = Update::new(Exchange::Binance);
+        orders.add_ask("0.00555", "1234", Exchange::Binance);
+        orders.add_bid("0.00551", "1234", Exchange::Binance);
+        let mut book = Book::new();
+        book.add_orders(orders);
+        assert_eq!(book.summary.spread, 0.00004);
+    }
+
+    #[test]
+    fn test_spread_2() {
+        let mut orders = Update::new(Exchange::Binance);
+        orders.add_ask("0.00555", "1234", Exchange::Binance);
+        let mut book = Book::new();
+        book.add_orders(orders);
+        assert_eq!(book.summary.spread, 0.00555);
+    }
+
+    #[test]
+    fn test_spread_3() {
+        let mut orders = Update::new(Exchange::Binance);
+        orders.add_bid("0.00555", "1234", Exchange::Binance);
+        let mut book = Book::new();
+        book.add_orders(orders);
+        assert_eq!(book.summary.spread, -0.00555);
+    }
+
+    #[test]
+    fn test_top_bid() {
+        let mut orders = Update::new(Exchange::Binance);
+        orders.add_bid("1", "1", Exchange::Binance);
+        orders.add_bid("3", "3", Exchange::Bitstamp);
+        orders.add_bid("2", "2", Exchange::Binance);
+        orders.add_bid("6", "6", Exchange::Bitstamp);
+
+        let mut book = Book::new();
+        book.add_orders(orders);
+
+        assert_eq!(
+            book.summary.bids[0],
+            Level {
+                price: 6.0,
+                amount: 6.0,
+                exchange: "bitstamp".to_string()
+            }
+        );
+        assert_eq!(
+            book.summary.bids[1],
+            Level {
+                price: 3.0,
+                amount: 3.0,
+                exchange: "bitstamp".to_string()
+            }
+        );
+        assert_eq!(
+            book.summary.bids[2],
+            Level {
+                price: 2.0,
+                amount: 2.0,
+                exchange: "binance".to_string()
+            }
+        );
+        assert_eq!(
+            book.summary.bids[3],
+            Level {
+                price: 1.0,
+                amount: 1.0,
+                exchange: "binance".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_top_bid_2() {
+        let mut orders = Update::new(Exchange::Binance);
+        orders.add_bid("0.00000000010001", "1", Exchange::Binance);
+        orders.add_bid("0.00000030003", "3", Exchange::Bitstamp);
+        orders.add_bid("0.000000020002", "2", Exchange::Binance);
+        orders.add_bid("0.0060006", "6", Exchange::Bitstamp);
+
+        let mut book = Book::new();
+        book.add_orders(orders);
+
+        assert_eq!(
+            book.summary.bids[0],
+            Level {
+                price: 0.0060006_f64,
+                amount: 6.0,
+                exchange: "bitstamp".to_string()
+            }
+        );
+        assert_eq!(
+            book.summary.bids[1],
+            Level {
+                price: 0.00000030003_f64,
+                amount: 3.0,
+                exchange: "bitstamp".to_string()
+            }
+        );
+        assert_eq!(
+            book.summary.bids[2],
+            Level {
+                price: 0.000000020002_f64,
+                amount: 2.0,
+                exchange: "binance".to_string()
+            }
+        );
+        assert_eq!(
+            book.summary.bids[3],
+            Level {
+                price: 0.00000000010001_f64,
+                amount: 1.0,
+                exchange: "binance".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_top_ask() {
+        let mut orders = Update::new(Exchange::Binance);
+        orders.add_ask("1", "1", Exchange::Binance);
+        orders.add_ask("3", "3", Exchange::Bitstamp);
+        orders.add_ask("2", "2", Exchange::Binance);
+        orders.add_ask("6", "6", Exchange::Bitstamp);
+
+        let mut book = Book::new();
+        book.add_orders(orders);
+
+        assert_eq!(
+            book.summary.asks[0],
+            Level {
+                price: 1.0,
+                amount: 1.0,
+                exchange: "binance".to_string()
+            }
+        );
+
+        assert_eq!(
+            book.summary.asks[1],
+            Level {
+                price: 2.0,
+                amount: 2.0,
+                exchange: "binance".to_string()
+            }
+        );
+
+        assert_eq!(
+            book.summary.asks[2],
+            Level {
+                price: 3.0,
+                amount: 3.0,
+                exchange: "bitstamp".to_string()
+            }
+        );
+
+        assert_eq!(
+            book.summary.asks[3],
+            Level {
+                price: 6.0,
+                amount: 6.0,
+                exchange: "bitstamp".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_decimal() {
+        let e = BigDecimal::from_str("0.00000030003");
+        assert_eq!(0.00000030003_f64, e.unwrap().to_f64().unwrap());
     }
 }
