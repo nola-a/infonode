@@ -1,7 +1,7 @@
 # Infonode - GrpcServer
 ### Run grpc server
 ```bash
-$ cargo run --bin infonode-server ethbtc
+$ cargo run --bin infonode-server ethbtc # all pairs are supported
 ```
 
 ### Run grpc client (debugging purpose)

@@ -14,6 +14,12 @@ message Summary {
     repeated Level asks = 3;
 }
 
+/*
+I wouldn't have choose double for price and amount
+the reason is it could cause error approximations instead
+I would have used some solution with fixed point(either a string or a scaled integer)
+*/
+
 message Level {
     string exchange = 1;
     double price = 2;

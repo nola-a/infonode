@@ -22,7 +22,7 @@
  */
 use crate::orderbook::{Level, Summary};
 use bigdecimal::{BigDecimal, ToPrimitive};
-use log::{debug, trace};
+use log::debug;
 use std::cmp::Ordering;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
