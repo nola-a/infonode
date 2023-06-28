@@ -37,14 +37,44 @@ impl BitstampClient {
         }
     }
 
+    async fn precisions(pair: String) -> (u64, u64) {
+        let body = reqwest::get("https://www.bitstamp.net/api/v2/trading-pairs-info")
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+
+        let parsed = json::parse(body.as_str()).unwrap();
+
+        if parsed.is_array() {
+            for i in 0..parsed.len() {
+                if parsed[i].has_key("url_symbol") && parsed[i]["url_symbol"].to_string() == pair {
+                    return (
+                        parsed[i]["base_decimals"].as_u64().unwrap(),
+                        parsed[i]["instant_order_counter_decimals"]
+                            .as_u64()
+                            .unwrap(),
+                    );
+                }
+            }
+        }
+
+        panic!("cannot get precisions from bitstamp");
+    }
+
     pub fn do_main_loop(&self, tx: Sender<Update>) {
-        let url = "wss://ws.bitstamp.net";
+        let stream_url = "wss://ws.bitstamp.net";
         let submessage = format!(
             "{}{}{}",
             r#"{"event":"bts:subscribe","data":{"channel":"order_book_"#, self.pair, "\"}}"
         );
+
+        let pair = self.pair.clone();
+
         tokio::spawn(async move {
-            let (mut socket, _) = connect(Url::parse(&url).unwrap()).expect("Can't connect");
+            let (p_prec, a_prec) = BitstampClient::precisions(pair).await;
+            let (mut socket, _) = connect(Url::parse(&stream_url).unwrap()).expect("Can't connect");
             socket
                 .write_message(Message::Text(submessage.into()))
                 .unwrap();
@@ -54,7 +84,7 @@ impl BitstampClient {
                 loop {
                     let msg = socket.read_message().expect("Error reading message");
                     let parsed = json::parse(&msg.to_string()).unwrap();
-                    let mut orders = Update::new(Exchange::Bitstamp);
+                    let mut orders = Update::new(Exchange::Bitstamp, p_prec, a_prec);
                     if parsed.has_key("data")
                         && parsed["data"].has_key("asks")
                         && parsed["data"]["asks"].is_array()
@@ -64,7 +94,6 @@ impl BitstampClient {
                                 orders.add_ask(
                                     &parsed["data"]["asks"][i][0].to_string(),
                                     &parsed["data"]["asks"][i][1].to_string(),
-                                    Exchange::Bitstamp,
                                 );
                             }
                         }
@@ -78,7 +107,6 @@ impl BitstampClient {
                                 orders.add_bid(
                                     &parsed["data"]["bids"][i][0].to_string(),
                                     &parsed["data"]["bids"][i][1].to_string(),
-                                    Exchange::Bitstamp,
                                 );
                             }
                         }

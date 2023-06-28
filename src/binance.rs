@@ -37,24 +37,53 @@ impl BinanceClient {
         }
     }
 
+    async fn precisions(pair: String) -> (u64, u64) {
+        let precision_url = format!(
+            "{}{}",
+            "https://api.binance.com/api/v3/exchangeInfo?symbol=",
+            pair.to_ascii_uppercase()
+        );
+
+        let body = reqwest::get(precision_url)
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+
+        let parsed = json::parse(body.as_str()).unwrap();
+
+        if parsed.has_key("symbols") && parsed["symbols"].is_array() && parsed["symbols"].len() == 1
+        {
+            return (
+                parsed["symbols"][0]["quotePrecision"].as_u64().unwrap(),
+                parsed["symbols"][0]["baseAssetPrecision"].as_u64().unwrap(),
+            );
+        }
+        panic!("cannot get precisions from binance");
+    }
+
     pub fn do_main_loop(&self, tx: Sender<Update>) {
-        let url = format!(
+        let stream_url = format!(
             "{}{}{}",
             "wss://stream.binance.com:9443/ws/", self.pair, "@depth20@100ms"
         );
+
+        let pair = self.pair.clone();
+
         tokio::spawn(async move {
-            let (mut socket, _) = connect(Url::parse(&url).unwrap()).expect("Can't connect");
+            let (p_prec, a_prec) = BinanceClient::precisions(pair).await;
+            let (mut socket, _) = connect(Url::parse(&stream_url).unwrap()).expect("Can't connect");
             loop {
                 let msg = socket.read_message().expect("Error reading message");
                 let parsed = json::parse(&msg.to_string()).unwrap();
-                let mut orders = Update::new(Exchange::Binance);
+                let mut orders = Update::new(Exchange::Binance, p_prec, a_prec);
                 if parsed.has_key("asks") && parsed["asks"].is_array() {
                     for i in 0..parsed["asks"].len() {
                         if parsed["asks"][i].len() == 2 {
                             orders.add_ask(
                                 &parsed["asks"][i][0].to_string(),
                                 &parsed["asks"][i][1].to_string(),
-                                Exchange::Binance,
                             );
                         }
                     }
@@ -65,7 +94,6 @@ impl BinanceClient {
                             orders.add_bid(
                                 &parsed["bids"][i][0].to_string(),
                                 &parsed["bids"][i][1].to_string(),
-                                Exchange::Binance,
                             );
                         }
                     }
