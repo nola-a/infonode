@@ -39,7 +39,7 @@ impl BitstampClient {
         }
     }
 
-    async fn precisions(pair: String) -> (u64, u64) {
+    pub async fn precisions(pair: String) -> (u64, u64) {
         let body = reqwest::get("https://www.bitstamp.net/api/v2/trading-pairs-info")
             .await
             .unwrap()

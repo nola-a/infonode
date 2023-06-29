@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // parse command line
     let pair = env::args()
         .nth(1)
-        .unwrap_or_else(|| panic!("run ./infonode-server ethbtc"));
+        .unwrap_or_else(|| panic!("run ./infonode-server <pair>"));
 
     // create queues
     let (orders_tx, orders_rx) = unbounded();

@@ -38,7 +38,7 @@ impl BinanceClient {
         }
     }
 
-    async fn precisions(pair: String) -> (u64, u64) {
+    pub async fn precisions(pair: String) -> (u64, u64) {
         let precision_url = format!(
             "{}{}",
             "https://api.binance.com/api/v3/exchangeInfo?symbol=",

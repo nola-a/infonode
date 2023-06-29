@@ -38,8 +38,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into_inner();
 
     //NOTE: client must always apply precisions!!!!
-    while let Some(levels) = stream.message().await? {
-        println!("BookSummary = {:?}", levels);
+    while let Some(s) = stream.message().await? {
+        println!("BookSummary = {:?}", s);
     }
     Ok(())
 }
